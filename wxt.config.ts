@@ -11,7 +11,7 @@ export default defineConfig({
     author: {
       email: "blueobsidian196@gmail.com",
     },
-    homepage_url: "https://github.com/emoji-helper/emoji-helper",
+    homepage_url: "https://github.com/Emmanuek5/Emoji-Helper",
 
     // Extension permissions
     permissions: ["activeTab", "storage"],
@@ -50,9 +50,6 @@ export default defineConfig({
       "96": "icon/96.png",
       "128": "icon/128.png",
     },
-
-    // Manifest version
-    manifest_version: 3,
 
     // Content Security Policy for React
     content_security_policy: {

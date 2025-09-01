@@ -464,6 +464,75 @@ export const emojiDatabase: EmojiData[] = [
   { name: "skateboard", emoji: "🛹", keywords: ["skateboard", "skate"] },
   { name: "roller_skate", emoji: "🛼", keywords: ["roller", "skate"] },
 
+  // Landmarks & Space
+  {
+    name: "statue_of_liberty",
+    emoji: "🗽",
+    keywords: ["statue", "liberty", "new york"],
+  },
+  { name: "eiffel_tower", emoji: "🗼", keywords: ["eiffel", "tower", "paris"] },
+  { name: "tokyo_tower", emoji: "🗼", keywords: ["tokyo", "tower", "japan"] },
+  { name: "mount_fuji", emoji: "🗻", keywords: ["mount", "fuji", "japan"] },
+  {
+    name: "earth_globe_europe_africa",
+    emoji: "🌍",
+    keywords: ["earth", "globe", "world"],
+  },
+  {
+    name: "earth_globe_americas",
+    emoji: "🌎",
+    keywords: ["earth", "globe", "americas"],
+  },
+  {
+    name: "earth_globe_asia_australia",
+    emoji: "🌏",
+    keywords: ["earth", "globe", "asia"],
+  },
+  {
+    name: "milky_way",
+    emoji: "🌌",
+    keywords: ["milky way", "galaxy", "stars"],
+  },
+  { name: "rocket", emoji: "🚀", keywords: ["rocket", "space", "launch"] },
+  { name: "satellite", emoji: "🛰️", keywords: ["satellite", "space"] },
+  { name: "flying_saucer", emoji: "🛸", keywords: ["ufo", "alien", "saucer"] },
+
+  // Music & Instruments
+  { name: "musical_note", emoji: "🎵", keywords: ["music", "note"] },
+  { name: "musical_notes", emoji: "🎶", keywords: ["music", "notes"] },
+  { name: "microphone", emoji: "🎤", keywords: ["mic", "sing", "karaoke"] },
+  {
+    name: "headphone",
+    emoji: "🎧",
+    keywords: ["headphones", "music", "listen"],
+  },
+  { name: "guitar", emoji: "🎸", keywords: ["guitar", "music", "rock"] },
+  { name: "violin", emoji: "🎻", keywords: ["violin", "music", "strings"] },
+  { name: "drum", emoji: "🥁", keywords: ["drum", "music", "beat"] },
+  { name: "saxophone", emoji: "🎷", keywords: ["saxophone", "jazz", "music"] },
+  { name: "trumpet", emoji: "🎺", keywords: ["trumpet", "music", "brass"] },
+  { name: "accordion", emoji: "🪗", keywords: ["accordion", "music"] },
+
+  // Gaming & Tech
+  { name: "video_game", emoji: "🎮", keywords: ["game", "controller"] },
+  { name: "joystick", emoji: "🕹️", keywords: ["joystick", "arcade", "game"] },
+  { name: "game_die", emoji: "🎲", keywords: ["dice", "game", "random"] },
+  {
+    name: "chess_pawn",
+    emoji: "♟️",
+    keywords: ["chess", "pawn", "board game"],
+  },
+  { name: "robot", emoji: "🤖", keywords: ["robot", "ai", "bot"] },
+  { name: "laptop", emoji: "💻", keywords: ["laptop", "computer", "tech"] },
+  {
+    name: "desktop_computer",
+    emoji: "🖥️",
+    keywords: ["desktop", "computer", "pc"],
+  },
+  { name: "mobile_phone", emoji: "📱", keywords: ["phone", "mobile", "cell"] },
+  { name: "battery", emoji: "🔋", keywords: ["battery", "power"] },
+  { name: "electric_plug", emoji: "🔌", keywords: ["plug", "electricity"] },
+
   // Objects
   { name: "red_heart", emoji: "❤️", keywords: ["heart", "love", "red"] },
   { name: "orange_heart", emoji: "🧡", keywords: ["heart", "orange"] },
@@ -518,6 +587,18 @@ export const emojiDatabase: EmojiData[] = [
   { name: "cloud", emoji: "☁️", keywords: ["cloud"] },
   { name: "umbrella", emoji: "☂️", keywords: ["umbrella", "rain"] },
   { name: "snowman", emoji: "⛄", keywords: ["snowman", "winter"] },
+
+  // Flags
+  { name: "flag_us", emoji: "🇺🇸", keywords: ["flag", "usa", "america"] },
+  { name: "flag_uk", emoji: "🇬🇧", keywords: ["flag", "uk", "britain"] },
+  { name: "flag_fr", emoji: "🇫🇷", keywords: ["flag", "france"] },
+  { name: "flag_de", emoji: "🇩🇪", keywords: ["flag", "germany"] },
+  { name: "flag_jp", emoji: "🇯🇵", keywords: ["flag", "japan"] },
+  { name: "flag_it", emoji: "🇮🇹", keywords: ["flag", "italy"] },
+  { name: "flag_es", emoji: "🇪🇸", keywords: ["flag", "spain"] },
+  { name: "flag_cn", emoji: "🇨🇳", keywords: ["flag", "china"] },
+  { name: "flag_in", emoji: "🇮🇳", keywords: ["flag", "india"] },
+  { name: "flag_br", emoji: "🇧🇷", keywords: ["flag", "brazil"] },
 
   // Common Discord-style shortcuts
   { name: "sob", emoji: "😭", keywords: ["sob", "cry", "bawl"] },

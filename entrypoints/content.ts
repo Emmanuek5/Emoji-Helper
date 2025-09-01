@@ -7,6 +7,7 @@ import "../components/EmojiPicker.css";
 export default defineContentScript({
   matches: ["<all_urls>"],
   main() {
+    // State variables
     let currentInput:
       | HTMLInputElement
       | HTMLTextAreaElement
@@ -21,6 +22,10 @@ export default defineContentScript({
     let currentEmojis: any[] = [];
     let isUpdatingSelection: boolean = false;
     let triggerDisabledUntil: number = 0;
+    let lastKnownText: string = "";
+    let lastKnownCursorPos: number = 0;
+    let stableCheckTimeout: ReturnType<typeof setTimeout> | null = null;
+    let currentPickerPosition = { x: 0, y: 0 };
 
     // Create the picker container
     function createPickerContainer() {
@@ -43,288 +48,271 @@ export default defineContentScript({
       return pickerContainer;
     }
 
-    // Get cursor position in input field
-    function getCaretCoordinates(
-      element: HTMLInputElement | HTMLTextAreaElement | HTMLElement
-    ): { x: number; y: number } {
-      const rect = element.getBoundingClientRect();
-      const style = window.getComputedStyle(element);
-
-      // Handle contenteditable elements differently
-      if (element.contentEditable === "true") {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          const rects = range.getClientRects();
-          if (rects.length > 0) {
-            const lastRect = rects[rects.length - 1];
-            return {
-              x: lastRect.right + window.scrollX,
-              y: lastRect.bottom + window.scrollY + 5,
-            };
-          }
-        }
-        // Fallback to element position
-        return {
-          x: rect.left + window.scrollX,
-          y: rect.bottom + window.scrollY + 5,
-        };
-      }
-
-      // For better textarea support, use a more robust approach
-      const isTextarea = element.tagName === "TEXTAREA";
-
-      // Create a mirror div to calculate text position
-      const div = document.createElement("div");
-      const properties = [
-        "direction",
-        "boxSizing",
-        "width",
-        "height",
-        "overflowX",
-        "overflowY",
-        "borderTopWidth",
-        "borderRightWidth",
-        "borderBottomWidth",
-        "borderLeftWidth",
-        "borderStyle",
-        "paddingTop",
-        "paddingRight",
-        "paddingBottom",
-        "paddingLeft",
-        "fontStyle",
-        "fontVariant",
-        "fontWeight",
-        "fontStretch",
-        "fontSize",
-        "fontSizeAdjust",
-        "lineHeight",
-        "fontFamily",
-        "textAlign",
-        "textTransform",
-        "textIndent",
-        "textDecoration",
-        "letterSpacing",
-        "wordSpacing",
-        "tabSize",
-        "MozTabSize",
-        "whiteSpace",
-        "wordBreak",
-        "wordWrap",
-        "color",
-      ];
-
-      properties.forEach((prop) => {
-        div.style[prop as any] = style[prop as any];
-      });
-
-      div.style.position = "absolute";
-      div.style.visibility = "hidden";
-      div.style.whiteSpace = isTextarea ? "pre-wrap" : "nowrap";
-      div.style.wordWrap = "break-word";
-      div.style.top = "0px";
-      div.style.left = "0px";
-      div.style.overflow = "hidden";
-
-      document.body.appendChild(div);
-
-      const inputElement = element as HTMLInputElement | HTMLTextAreaElement;
-      const text = inputElement.value.substring(
-        0,
-        inputElement.selectionStart || 0
-      );
-      div.textContent = text;
-
-      const span = document.createElement("span");
-      span.textContent = "|"; // Use a simple cursor marker
-      div.appendChild(span);
-
-      // Calculate position with better handling for textareas
-      const lineHeight =
-        parseInt(style.lineHeight) || parseInt(style.fontSize) * 1.2;
-
-      let coordinates = {
-        x: rect.left + span.offsetLeft + window.scrollX,
-        y: rect.top + span.offsetTop + window.scrollY + lineHeight + 5,
-      };
-
-      // Ensure picker doesn't go off screen
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const pickerWidth = 320; // Approximate picker width
-      const pickerHeight = 300; // Approximate picker height
-
-      // Adjust horizontal position if too close to right edge
-      if (coordinates.x + pickerWidth > viewportWidth) {
-        coordinates.x = Math.max(10, viewportWidth - pickerWidth - 10);
-      }
-
-      // Adjust vertical position if too close to bottom edge
-      if (coordinates.y + pickerHeight > viewportHeight) {
-        coordinates.y = rect.top + window.scrollY - pickerHeight - 5;
-      }
-
-      document.body.removeChild(div);
-      return coordinates;
-    }
-
-    // Store current picker position
-    let currentPickerPosition = { x: 0, y: 0 };
-
-    // Update picker selection
-    function updatePickerSelection() {
-      if (pickerRoot && pickerContainer && pickerVisible) {
-        pickerRoot.render(
-          React.createElement(EmojiPicker, {
-            query: emojiQuery,
-            position: currentPickerPosition,
-            visible: true,
-            selectedIndex: selectedEmojiIndex,
-            onEmojiSelect: (emoji: string) => {
-              insertEmoji(emoji);
-              hideEmojiPicker();
-            },
-            onClose: hideEmojiPicker,
-          })
-        );
-      }
-
-      // Reset flag after rendering
-      setTimeout(() => {
-        isUpdatingSelection = false;
-      }, 100);
-    }
-
-    // Show emoji picker
-    function showEmojiPicker(
-      query: string,
-      position: { x: number; y: number }
-    ) {
-      createPickerContainer();
-      pickerVisible = true;
-
-      // Update emoji list and reset selection
-      currentEmojis = searchEmojis(query, 8);
-      selectedEmojiIndex = 0;
-      currentPickerPosition = position;
-
-      if (pickerRoot && pickerContainer) {
-        pickerContainer.style.pointerEvents = "auto";
-
-        pickerRoot.render(
-          React.createElement(EmojiPicker, {
-            query,
-            position: position,
-            visible: true,
-            selectedIndex: selectedEmojiIndex,
-            onEmojiSelect: (emoji: string) => {
-              insertEmoji(emoji);
-              hideEmojiPicker();
-            },
-            onClose: hideEmojiPicker,
-          })
-        );
-      }
-    }
-
-    // Hide emoji picker
-    function hideEmojiPicker() {
-      pickerVisible = false;
-      emojiTriggerStart = -1;
-      emojiQuery = "";
-      selectedEmojiIndex = 0;
-      currentEmojis = [];
-      isUpdatingSelection = false;
-
-      if (pickerRoot && pickerContainer) {
-        pickerContainer.style.pointerEvents = "none";
-        pickerRoot.render(
-          React.createElement(EmojiPicker, {
-            query: "",
-            position: { x: 0, y: 0 },
-            visible: false,
-            selectedIndex: 0,
-            onEmojiSelect: () => {},
-            onClose: () => {},
-          })
-        );
-      }
-    }
-
-    // Insert emoji into contenteditable element
-    function insertEmojiInContentEditable(element: HTMLElement, emoji: string) {
+    // Extract plain text from contenteditable, handling Twitter's complex structure
+    function extractPlainTextWithCursor(element: HTMLElement): {
+      text: string;
+      cursorPos: number;
+    } {
       const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return;
-
-      const range = selection.getRangeAt(0);
-      const textContent = element.textContent || "";
-      const cursorPos = getContentEditableInfo(element).cursorPos;
-
-      // Find the trigger position
-      let colonPos = -1;
-      for (let i = cursorPos - 1; i >= Math.max(0, cursorPos - 20); i--) {
-        if (textContent[i] === ":") {
-          colonPos = i;
-          break;
-        }
-        if (textContent[i] === " " || textContent[i] === "\n") {
-          break;
-        }
+      if (!selection || selection.rangeCount === 0) {
+        return { text: element.textContent || "", cursorPos: 0 };
       }
 
-      if (colonPos === -1) return;
-
-      // Create a new range to select the trigger text
-      const triggerRange = document.createRange();
+      // Walk through all text nodes and build plain text
       const walker = document.createTreeWalker(
         element,
         NodeFilter.SHOW_TEXT,
         null
       );
 
-      let currentPos = 0;
-      let startNode = null;
-      let endNode = null;
-      let startOffset = 0;
-      let endOffset = 0;
+      let plainText = "";
+      let cursorPos = 0;
+      let foundCursor = false;
+      const range = selection.getRangeAt(0);
 
       while (walker.nextNode()) {
-        const node = walker.currentNode as Text;
-        const nodeLength = node.textContent?.length || 0;
+        const textNode = walker.currentNode as Text;
+        const nodeText = textNode.textContent || "";
 
-        if (currentPos <= colonPos && currentPos + nodeLength > colonPos) {
-          startNode = node;
-          startOffset = colonPos - currentPos;
+        // Check if cursor is in this text node
+        if (!foundCursor && textNode === range.startContainer) {
+          cursorPos = plainText.length + range.startOffset;
+          foundCursor = true;
+        } else if (!foundCursor) {
+          // Cursor is after this node
+          cursorPos = plainText.length + nodeText.length;
         }
 
-        if (currentPos <= cursorPos && currentPos + nodeLength >= cursorPos) {
-          endNode = node;
-          endOffset = cursorPos - currentPos;
-          break;
+        plainText += nodeText;
+      }
+
+      return {
+        text: plainText,
+        cursorPos: foundCursor ? cursorPos : plainText.length,
+      };
+    }
+
+    // Get text content and cursor position for contenteditable elements (robust version)
+    function getContentEditableInfo(element: HTMLElement): {
+      text: string;
+      cursorPos: number;
+    } {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        return { text: element.textContent || "", cursorPos: 0 };
+      }
+
+      const range = selection.getRangeAt(0);
+
+      // For complex editors like Twitter, we need to be more careful
+      try {
+        // Get all text content, handling nested elements
+        const textContent = element.textContent || "";
+
+        // Calculate cursor position more robustly
+        const preCaretRange = range.cloneRange();
+        preCaretRange.selectNodeContents(element);
+        preCaretRange.setEnd(range.endContainer, range.endOffset);
+
+        // Use toString() which handles complex DOM structures better
+        const preCaretText = preCaretRange.toString();
+
+        return {
+          text: textContent,
+          cursorPos: preCaretText.length,
+        };
+      } catch (e) {
+        console.log("[Emoji Helper] Error getting contenteditable info:", e);
+        return { text: element.textContent || "", cursorPos: 0 };
+      }
+    }
+
+    // Simple emoji insertion for contenteditable (works better with modern editors)
+    function insertEmojiSimple(element: HTMLElement, emoji: string): boolean {
+      try {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return false;
+
+        // Use modern browser APIs for text insertion
+        if (navigator.clipboard && window.ClipboardEvent) {
+          // Modern approach using clipboard events
+          const range = selection.getRangeAt(0);
+
+          // Find and select trigger text
+          const extracted = extractPlainTextWithCursor(element);
+          const cursorPos = extracted.cursorPos;
+          const textContent = extracted.text;
+
+          let colonPos = -1;
+          for (let i = cursorPos - 1; i >= Math.max(0, cursorPos - 20); i--) {
+            if (textContent[i] === ":") {
+              colonPos = i;
+              break;
+            }
+            if (textContent[i] === " " || textContent[i] === "\n") {
+              break;
+            }
+          }
+
+          if (colonPos !== -1) {
+            // Select trigger text first
+            const triggerLength = cursorPos - colonPos;
+            for (let i = 0; i < triggerLength; i++) {
+              selection.modify("extend", "backward", "character");
+            }
+
+            // Try direct text replacement first
+            try {
+              const selectedText = selection.toString();
+              if (selectedText.length > 0) {
+                selection.deleteFromDocument();
+              }
+
+              // Insert emoji using insertText if available
+              if (document.execCommand("insertText", false, emoji + " ")) {
+                console.log("[Emoji Helper] Direct insertion successful");
+                return true;
+              }
+            } catch (insertError) {
+              console.log(
+                "[Emoji Helper] Direct insertion failed, trying paste event"
+              );
+              return false;
+            }
+          }
+        } else if (
+          document.queryCommandSupported &&
+          document.queryCommandSupported("insertText")
+        ) {
+          // Fallback to execCommand
+          const extracted = extractPlainTextWithCursor(element);
+          const cursorPos = extracted.cursorPos;
+          const textContent = extracted.text;
+
+          let colonPos = -1;
+          for (let i = cursorPos - 1; i >= Math.max(0, cursorPos - 20); i--) {
+            if (textContent[i] === ":") {
+              colonPos = i;
+              break;
+            }
+            if (textContent[i] === " " || textContent[i] === "\n") {
+              break;
+            }
+          }
+
+          if (colonPos !== -1) {
+            const triggerLength = cursorPos - colonPos;
+
+            // Select the trigger text backwards
+            selection.modify("extend", "backward", "character");
+            for (let i = 1; i < triggerLength; i++) {
+              selection.modify("extend", "backward", "character");
+            }
+
+            // Insert emoji
+            document.execCommand("insertText", false, emoji + " ");
+
+            console.log("[Emoji Helper] Simple insertion successful");
+            return true;
+          }
         }
 
-        currentPos += nodeLength;
+        return false;
+      } catch (e) {
+        console.log("[Emoji Helper] Simple insertion failed:", e);
+        return false;
       }
+    }
 
-      if (startNode && endNode) {
-        triggerRange.setStart(startNode, startOffset);
-        triggerRange.setEnd(endNode, endOffset);
-        triggerRange.deleteContents();
+    // Insert emoji into contenteditable element (robust version for Twitter)
+    function insertEmojiInContentEditable(element: HTMLElement, emoji: string) {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
 
-        const emojiNode = document.createTextNode(emoji + " ");
-        triggerRange.insertNode(emojiNode);
+      try {
+        // Use the robust text extraction
+        const extracted = extractPlainTextWithCursor(element);
+        const textContent = extracted.text;
+        const cursorPos = extracted.cursorPos;
 
-        // Position cursor after emoji
-        const newRange = document.createRange();
-        newRange.setStartAfter(emojiNode);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
+        console.log("[Emoji Helper] Inserting emoji in contenteditable:", {
+          emoji,
+          textContent,
+          cursorPos,
+          triggerStart: emojiTriggerStart,
+        });
+
+        // Find the trigger position
+        let colonPos = -1;
+        for (let i = cursorPos - 1; i >= Math.max(0, cursorPos - 20); i--) {
+          if (textContent[i] === ":") {
+            colonPos = i;
+            break;
+          }
+          if (textContent[i] === " " || textContent[i] === "\n") {
+            break;
+          }
+        }
+
+        if (colonPos === -1) return;
+
+        // Create a new range to select the trigger text
+        const triggerRange = document.createRange();
+        const walker = document.createTreeWalker(
+          element,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+
+        let currentPos = 0;
+        let startNode = null;
+        let endNode = null;
+        let startOffset = 0;
+        let endOffset = 0;
+
+        while (walker.nextNode()) {
+          const node = walker.currentNode as Text;
+          const nodeLength = node.textContent?.length || 0;
+
+          if (
+            currentPos <= emojiTriggerStart &&
+            currentPos + nodeLength > emojiTriggerStart
+          ) {
+            startNode = node;
+            startOffset = emojiTriggerStart - currentPos;
+          }
+
+          if (currentPos <= cursorPos && currentPos + nodeLength >= cursorPos) {
+            endNode = node;
+            endOffset = cursorPos - currentPos;
+            break;
+          }
+
+          currentPos += nodeLength;
+        }
+
+        if (startNode && endNode) {
+          triggerRange.setStart(startNode, startOffset);
+          triggerRange.setEnd(endNode, endOffset);
+          triggerRange.deleteContents();
+
+          const emojiNode = document.createTextNode(emoji + " ");
+          triggerRange.insertNode(emojiNode);
+
+          // Position cursor after emoji
+          const newRange = document.createRange();
+          newRange.setStartAfter(emojiNode);
+          newRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        }
+
+        // Trigger input events for frameworks
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+        element.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch (e) {
+        console.log("[Emoji Helper] Complex insertion failed:", e);
       }
-
-      // Trigger input events for frameworks
-      element.dispatchEvent(new Event("input", { bubbles: true }));
-      element.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
     // Insert emoji into the current input
@@ -333,7 +321,11 @@ export default defineContentScript({
 
       // Handle contenteditable elements differently
       if (currentInput.contentEditable === "true") {
-        insertEmojiInContentEditable(currentInput as HTMLElement, emoji);
+        // Try simple approach first for better compatibility
+        const success = insertEmojiSimple(currentInput as HTMLElement, emoji);
+        if (!success) {
+          insertEmojiInContentEditable(currentInput as HTMLElement, emoji);
+        }
         return;
       }
 
@@ -446,25 +438,311 @@ export default defineContentScript({
       inputElement.focus();
     }
 
-    // Get text content and cursor position for contenteditable elements
-    function getContentEditableInfo(element: HTMLElement): {
-      text: string;
-      cursorPos: number;
-    } {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) {
-        return { text: element.textContent || "", cursorPos: 0 };
+    // Get cursor position in input field
+    function getCaretCoordinates(
+      element: HTMLInputElement | HTMLTextAreaElement | HTMLElement
+    ): { x: number; y: number } {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+
+      console.log("[Emoji Helper] Positioning for element:", {
+        tagName: element.tagName,
+        contentEditable: element.contentEditable,
+        rect: {
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+        },
+        id: element.id,
+        className: element.className,
+      });
+
+      // Handle contenteditable elements differently
+      if (element.contentEditable === "true") {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+
+          // Try to get the actual cursor position
+          try {
+            // Create a temporary span at cursor position
+            const tempSpan = document.createElement("span");
+            tempSpan.style.position = "absolute";
+            tempSpan.style.visibility = "hidden";
+            tempSpan.textContent = "|";
+
+            // Insert at cursor position
+            const clonedRange = range.cloneRange();
+            clonedRange.collapse(true);
+            clonedRange.insertNode(tempSpan);
+
+            // Get position of the span
+            const spanRect = tempSpan.getBoundingClientRect();
+            const coordinates = {
+              x: spanRect.left + window.scrollX,
+              y: spanRect.bottom + window.scrollY + 5,
+            };
+
+            console.log(
+              "[Emoji Helper] Contenteditable coordinates (temp span):",
+              coordinates
+            );
+
+            // Clean up
+            tempSpan.remove();
+
+            // Restore selection
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+            return coordinates;
+          } catch (e) {
+            // Fallback to range rects
+            const rects = range.getClientRects();
+            if (rects.length > 0) {
+              const lastRect = rects[rects.length - 1];
+              const fallbackCoords = {
+                x: lastRect.right + window.scrollX,
+                y: lastRect.bottom + window.scrollY + 5,
+              };
+              console.log(
+                "[Emoji Helper] Contenteditable coordinates (range rects):",
+                fallbackCoords
+              );
+              return fallbackCoords;
+            }
+          }
+        }
+
+        // Ultimate fallback to element position
+        const ultimateFallback = {
+          x: rect.left + window.scrollX + 20,
+          y: rect.top + window.scrollY + 25,
+        };
+        console.log(
+          "[Emoji Helper] Using ultimate fallback positioning for contenteditable:",
+          ultimateFallback
+        );
+        return ultimateFallback;
       }
 
-      const range = selection.getRangeAt(0);
-      const preCaretRange = range.cloneRange();
-      preCaretRange.selectNodeContents(element);
-      preCaretRange.setEnd(range.endContainer, range.endOffset);
+      // For better textarea support, use a more robust approach
+      const isTextarea = element.tagName === "TEXTAREA";
 
-      return {
-        text: element.textContent || "",
-        cursorPos: preCaretRange.toString().length,
+      // Create a mirror div to calculate text position
+      const div = document.createElement("div");
+      const properties = [
+        "direction",
+        "boxSizing",
+        "width",
+        "height",
+        "overflowX",
+        "overflowY",
+        "borderTopWidth",
+        "borderRightWidth",
+        "borderBottomWidth",
+        "borderLeftWidth",
+        "borderStyle",
+        "paddingTop",
+        "paddingRight",
+        "paddingBottom",
+        "paddingLeft",
+        "fontStyle",
+        "fontVariant",
+        "fontWeight",
+        "fontStretch",
+        "fontSize",
+        "fontSizeAdjust",
+        "lineHeight",
+        "fontFamily",
+        "textAlign",
+        "textTransform",
+        "textIndent",
+        "textDecoration",
+        "letterSpacing",
+        "wordSpacing",
+        "tabSize",
+        "MozTabSize",
+        "whiteSpace",
+        "wordBreak",
+        "wordWrap",
+        "color",
+      ];
+
+      properties.forEach((prop) => {
+        div.style[prop as any] = style[prop as any];
+      });
+
+      div.style.position = "absolute";
+      div.style.visibility = "hidden";
+      div.style.whiteSpace = isTextarea ? "pre-wrap" : "nowrap";
+      div.style.wordWrap = "break-word";
+      div.style.top = "0px";
+      div.style.left = "0px";
+      div.style.overflow = "hidden";
+
+      document.body.appendChild(div);
+
+      const inputElement = element as HTMLInputElement | HTMLTextAreaElement;
+      const text = inputElement.value.substring(
+        0,
+        inputElement.selectionStart || 0
+      );
+      div.textContent = text;
+
+      const span = document.createElement("span");
+      span.textContent = "|"; // Use a simple cursor marker
+      div.appendChild(span);
+
+      // Calculate position with better handling for textareas
+      const lineHeight =
+        parseInt(style.lineHeight) || parseInt(style.fontSize) * 1.2;
+
+      let coordinates = {
+        x: rect.left + span.offsetLeft + window.scrollX,
+        y: rect.top + span.offsetTop + window.scrollY + lineHeight + 5,
       };
+
+      // Ensure picker doesn't go off screen
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const pickerWidth = 320; // Approximate picker width
+      const pickerHeight = 300; // Approximate picker height
+
+      // Adjust horizontal position if too close to right edge
+      if (coordinates.x + pickerWidth > viewportWidth) {
+        coordinates.x = Math.max(10, viewportWidth - pickerWidth - 10);
+      }
+
+      // Adjust vertical position if too close to bottom edge
+      if (coordinates.y + pickerHeight > viewportHeight) {
+        coordinates.y = rect.top + window.scrollY - pickerHeight - 5;
+      }
+
+      console.log("[Emoji Helper] Input/textarea coordinates:", coordinates);
+
+      document.body.removeChild(div);
+      return coordinates;
+    }
+
+    // Update picker selection
+    function updatePickerSelection() {
+      if (pickerRoot && pickerContainer && pickerVisible) {
+        pickerRoot.render(
+          React.createElement(EmojiPicker, {
+            query: emojiQuery,
+            position: currentPickerPosition,
+            visible: true,
+            selectedIndex: selectedEmojiIndex,
+            onEmojiSelect: (emoji: string) => {
+              insertEmoji(emoji);
+              hideEmojiPicker();
+            },
+            onClose: hideEmojiPicker,
+          })
+        );
+      }
+
+      // Reset flag after rendering
+      setTimeout(() => {
+        isUpdatingSelection = false;
+      }, 100);
+    }
+
+    // Show emoji picker
+    function showEmojiPicker(
+      query: string,
+      position: { x: number; y: number }
+    ) {
+      createPickerContainer();
+      pickerVisible = true;
+
+      // Update emoji list and reset selection
+      currentEmojis = searchEmojis(query, 8);
+      selectedEmojiIndex = 0;
+      currentPickerPosition = position;
+
+      if (pickerRoot && pickerContainer) {
+        pickerContainer.style.pointerEvents = "auto";
+
+        pickerRoot.render(
+          React.createElement(EmojiPicker, {
+            query,
+            position: position,
+            visible: true,
+            selectedIndex: selectedEmojiIndex,
+            onEmojiSelect: (emoji: string) => {
+              insertEmoji(emoji);
+              hideEmojiPicker();
+            },
+            onClose: hideEmojiPicker,
+          })
+        );
+      }
+    }
+
+    // Hide emoji picker
+    function hideEmojiPicker() {
+      pickerVisible = false;
+      emojiTriggerStart = -1;
+      emojiQuery = "";
+      selectedEmojiIndex = 0;
+      currentEmojis = [];
+      isUpdatingSelection = false;
+
+      if (pickerRoot && pickerContainer) {
+        pickerContainer.style.pointerEvents = "none";
+        pickerRoot.render(
+          React.createElement(EmojiPicker, {
+            query: "",
+            position: { x: 0, y: 0 },
+            visible: false,
+            selectedIndex: 0,
+            onEmojiSelect: () => {},
+            onClose: () => {},
+          })
+        );
+      }
+    }
+
+    // Stable check function that waits for DOM to settle
+    function performStableEmojiCheck(
+      element: HTMLInputElement | HTMLTextAreaElement | HTMLElement
+    ) {
+      if (stableCheckTimeout) {
+        clearTimeout(stableCheckTimeout);
+      }
+
+      stableCheckTimeout = setTimeout(() => {
+        // Double-check that the element is still valid and focused
+        if (element === currentInput && document.contains(element)) {
+          const currentText =
+            element.contentEditable === "true"
+              ? getContentEditableInfo(element).text
+              : (element as HTMLInputElement | HTMLTextAreaElement).value;
+
+          const currentCursor =
+            element.contentEditable === "true"
+              ? getContentEditableInfo(element).cursorPos
+              : (element as HTMLInputElement | HTMLTextAreaElement)
+                  .selectionStart || 0;
+
+          // Only proceed if text/cursor has stabilized
+          if (
+            currentText === lastKnownText &&
+            currentCursor === lastKnownCursorPos
+          ) {
+            checkEmojiTrigger(element);
+          } else {
+            // Text is still changing, wait more
+            lastKnownText = currentText;
+            lastKnownCursorPos = currentCursor;
+            performStableEmojiCheck(element);
+          }
+        }
+        stableCheckTimeout = null;
+      }, 50); // Wait for DOM to stabilize
     }
 
     // Check if character triggers emoji search
@@ -485,9 +763,15 @@ export default defineContentScript({
         value = inputElement.value;
         cursorPos = inputElement.selectionStart || 0;
       } else if (element.contentEditable === "true") {
-        const info = getContentEditableInfo(element);
-        value = info.text;
-        cursorPos = info.cursorPos;
+        // Use robust text extraction for complex editors
+        const extracted = extractPlainTextWithCursor(element);
+        value = extracted.text;
+        cursorPos = extracted.cursorPos;
+
+        console.log("[Emoji Helper] Extracted from contenteditable:", {
+          value,
+          cursorPos,
+        });
       } else {
         return;
       }
@@ -558,47 +842,6 @@ export default defineContentScript({
       );
     }
 
-    // Handle input events
-    function handleInput(e: Event) {
-      const target = e.target as HTMLElement;
-      if (target && isValidInputElement(target)) {
-        currentInput = target as
-          | HTMLInputElement
-          | HTMLTextAreaElement
-          | HTMLElement;
-        checkEmojiTrigger(currentInput);
-      }
-    }
-
-    // Handle focus events
-    function handleFocus(e: Event) {
-      const target = e.target as HTMLElement;
-      if (target && isValidInputElement(target)) {
-        currentInput = target as
-          | HTMLInputElement
-          | HTMLTextAreaElement
-          | HTMLElement;
-      }
-    }
-
-    // Handle blur events
-    function handleBlur(e: Event) {
-      // Small delay to allow emoji selection
-      setTimeout(() => {
-        if (pickerVisible && document.activeElement !== currentInput) {
-          hideEmojiPicker();
-        }
-      }, 150);
-    }
-
-    // Handle clicks outside
-    function handleClick(e: Event) {
-      const target = e.target as HTMLElement;
-      if (pickerVisible && !target.closest("#emoji-helper-picker")) {
-        hideEmojiPicker();
-      }
-    }
-
     // Debug function to log element info
     function debugElement(element: HTMLElement, eventType: string) {
       console.log(`[Emoji Helper] ${eventType}:`, {
@@ -626,8 +869,44 @@ export default defineContentScript({
         debugElement(target, e.type);
         if (isValidInputElement(target)) {
           currentInput = target;
-          checkEmojiTrigger(currentInput);
+
+          // For contenteditable elements (like Twitter), use stable checking
+          if (target.contentEditable === "true") {
+            const info = getContentEditableInfo(target);
+            lastKnownText = info.text;
+            lastKnownCursorPos = info.cursorPos;
+            performStableEmojiCheck(target);
+          } else {
+            // For regular inputs, check immediately
+            checkEmojiTrigger(target);
+          }
         }
+      }
+    }
+
+    // Handle focus events
+    function handleFocus(e: Event) {
+      const target = e.target as HTMLElement;
+      if (target && isValidInputElement(target)) {
+        currentInput = target;
+      }
+    }
+
+    // Handle blur events
+    function handleBlur(e: Event) {
+      // Small delay to allow emoji selection
+      setTimeout(() => {
+        if (pickerVisible && document.activeElement !== currentInput) {
+          hideEmojiPicker();
+        }
+      }, 150);
+    }
+
+    // Handle clicks outside
+    function handleClick(e: Event) {
+      const target = e.target as HTMLElement;
+      if (pickerVisible && !target.closest("#emoji-helper-picker")) {
+        hideEmojiPicker();
       }
     }
 
@@ -730,7 +1009,7 @@ export default defineContentScript({
             );
             inputs.forEach((input) => {
               if (isValidInputElement(input)) {
-                input.addEventListener("input", handleInput, true);
+                input.addEventListener("input", enhancedHandleInput, true);
                 input.addEventListener("focus", handleFocus, true);
                 input.addEventListener("blur", handleBlur, true);
               }
