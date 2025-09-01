@@ -1,0 +1,133 @@
+.emoji-helper-popup {
+  width: 350px;
+  min-height: 500px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: #2f3136;
+  color: #dcddde;
+  padding: 0;
+  margin: 0;
+}
+
+.header {
+  text-align: center;
+  padding: 24px 20px 16px;
+  background: #36393f;
+  border-bottom: 1px solid #40444b;
+}
+
+.header h1 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.header p {
+  margin: 0;
+  font-size: 14px;
+  color: #b9bbbe;
+  font-weight: 500;
+}
+
+.content {
+  padding: 20px;
+}
+
+.feature-status {
+  margin-bottom: 24px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #43b581;
+  box-shadow: 0 0 8px rgba(67, 181, 129, 0.5);
+}
+
+.how-to-use {
+  margin-bottom: 24px;
+}
+
+.how-to-use h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.how-to-use ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.how-to-use li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.how-to-use code {
+  background: #40444b;
+  color: #f6f6f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+}
+
+.examples {
+  margin-bottom: 24px;
+}
+
+.examples h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.example-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.example-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #40444b;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  border: 1px solid #4f545c;
+}
+
+.example-item code {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+  color: #f6f6f6;
+}
+
+.example-item span {
+  font-size: 18px;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.footer p {
+  margin: 0;
+  font-size: 13px;
+  color: #72767d;
+  font-weight: 500;
+}
